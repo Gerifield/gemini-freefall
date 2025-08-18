@@ -12,6 +12,8 @@ const (
 	headerAPIKey = "x-goog-api-key"
 
 	// TODO: use the original URL maybe with changing the model name only, because this doens't work with streaming, just the generateContents
+	// We could maybe use the `:....` ending to support both generateContent and generateContentStream
+	// Just look and cut that and use it or default back to generateContent
 	targetURLPattern = "https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent"
 )
 
