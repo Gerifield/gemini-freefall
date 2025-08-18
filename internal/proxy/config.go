@@ -89,6 +89,14 @@ func isValidBackend(proxyPath string, cfg *Config) bool {
 	return err == nil
 }
 
+func modelName(proxyPath string) string {
+	parts := strings.SplitN(proxyPath, ".", 2)
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
 func getBackend(proxyPath string, cfg *Config) (Backend, error) {
 	parts := strings.SplitN(proxyPath, ".", 2)
 	if len(parts) < 2 {
