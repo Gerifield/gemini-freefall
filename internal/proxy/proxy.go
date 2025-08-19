@@ -2,6 +2,7 @@
 package proxy
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
@@ -43,6 +44,19 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the request body into a buffer
+	var bodyBuffer []byte
+	if r.Body != nil {
+		// Read the body into the buffer
+		var err error
+		bodyBuffer, err = io.ReadAll(r.Body)
+		if err != nil {
+			slog.Error("error reading request body", slog.String("error", err.Error()))
+			http.Error(w, "error reading request body", http.StatusInternalServerError)
+			return
+		}
+	}
+
 	slog.Info("proxy configuration found for API key", slog.String("apiKey", apiKey), slog.Any("proxyCfg", proxyCfg))
 	for _, c := range proxyCfg {
 		backend, err := getBackend(c, l.config)
@@ -54,7 +68,7 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 
 		// Forward the request to the backend
 		slog.Info("Forwarding request to backend", slog.String("backend", backend.Name), slog.String("proxyPath", c))
-		req, err := http.NewRequest(r.Method, fmt.Sprintf(targetURLPattern, modelName(c)), r.Body)
+		req, err := http.NewRequest(r.Method, fmt.Sprintf(targetURLPattern, modelName(c)), bytes.NewReader(bodyBuffer))
 		if err != nil {
 			slog.Error("failed to create new request", slog.Any("err", err), slog.String("proxyPath", c))
 			continue
@@ -77,8 +91,10 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			slog.Error("backend returned non-OK status", slog.String("backend", backend.Name), slog.Int("statusCode", resp.StatusCode), slog.String("proxyPath", c))
-			_, _ = io.Copy(w, resp.Body)
+			// Log the response body for debugging purposes
+			b, _ := io.ReadAll(resp.Body)
+			slog.Error("backend returned non-OK status", slog.String("backend", backend.Name), slog.Int("statusCode", resp.StatusCode), slog.String("proxyPath", c), slog.String("body", string(b)))
+
 			_ = resp.Body.Close() // Close the response body to avoid resource leaks
 
 			continue
