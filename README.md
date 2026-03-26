@@ -1,76 +1,107 @@
-# Gemini freefall
+# Gemini Freefall
 
-## Description
-This package is a very-very simple proxy which allows you to add fallback models to Gemini API calls.
+**Gemini Freefall** is a lightweight, simple-to-use proxy for the Google Gemini API. It enables automatic fallback mechanisms between different models and API keys, ensuring that your application remains highly available even if an API key hits rate limits or a specific model encounters an error.
 
-You can setup one or more API keys (free or paid) and specify a callback path in case of an error/rate limit etc.
+Sometimes it doesn't matter much *which* model is used, as long as you get an answer. Gemini Freefall lets you prioritize your preferred models (like Pro) and transparently fail over to faster or smaller models (like Flash or Flash-Lite) or even secondary API keys (like switching from a free-tier key to a paid-tier key).
 
-Sometimes it doesn't matter much which model is used, you only need some answer.
+## Features
 
-You can setup multiple fallback paths and the chosen one will be based on the API key you send to this service.
+- **Automatic Failover:** Seamlessly fall back to secondary models or API keys when an error occurs.
+- **Multiple API Key Support:** Configure as many API keys (backends) as you need.
+- **Flexible Routing:** Create multiple "proxy paths" (used as virtual API keys) to define different fallback sequences.
+- **Cost Optimization:** Prioritize free-tier API keys, falling back to paid-tier keys only when necessary.
 
-Config example:
+## Prerequisites
+
+- Go 1.24 or later
+
+## Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/gemini-freefall.git
+   cd gemini-freefall
+   ```
+
+2. Copy the example configuration to create your own:
+   ```bash
+   cp config.yaml.example config.yaml
+   ```
+
+## Configuration
+
+Edit `config.yaml` to define your backends and proxy routing.
+
+- **`backend`**: Defines the physical API keys and the models each key has access to.
+- **`proxy`**: Defines the virtual API keys that your clients will use. Each virtual key (`path1`, `path2`, etc.) maps to a priority-ordered list of `backend.model` combinations.
+
 ```yaml
 backend:
   - name: "backend1"
     key: "<YOUR API KEY HERE1>"
     models:
-      - "gemini-2.5-pro"
-      - "gemini-2.5-flash"
-      - "gemini-2.5-flash-lite"
+      - "gemini-3.1-pro"
+      - "gemini-3.1-flash"
+      - "gemini-3.1-flash-lite"
   - name: "backend2"
     key: "<YOUR API KEY HERE2>"
     models:
-      - "gemini-2.5-flash"
-      - "gemini-2.5-flash-lite"
+      - "gemini-3.1-flash"
+      - "gemini-3.1-flash-lite"
 
 config:
-    port: 8080
-    proxy:
-      path1:
-      - "backend1.gemini-2.5-pro"
-      - "backend1.gemini-2.5-flash"
-      - "backend1.gemini-2.5-flash-lite"
-      path2:
-      - "backend1.gemini-2.5-flash"
-      - "backend2.gemini-2.5-flash"
+  port: 8080
+  proxy:
+    path1:
+      - "backend1.gemini-3.1-pro"
+      - "backend1.gemini-3.1-flash"
+      - "backend1.gemini-3.1-flash-lite"
+    path2:
+      - "backend1.gemini-3.1-flash"
+      - "backend2.gemini-3.1-flash"
 ```
 
-
-This setup will use 2 API keys on the backend and name these configs backend1 and backend2.
-Additionally you can specify a list of models for each backend.
-
-The proxy config then will setup the fallback list, the name there `path1` and `path2` are the "api keys" for the proxy service.
-
-Example call:
-```bash
-curl -H "x-goog-api-key: path1" http://127.0.0.1:8080/ -H "Content-type: application/json" -X POST \
-  -d '{
-    "contents": [
-      {
-        "parts": [
-          {
-            "text": "Explain how AI works in a few words"
-          }
-        ]
-      }
-    ]
-  }'
-```
-
-This will automatically try the `gemini-2.5-pro` from the `backend1`, if it fails it will try the `gemini-2.5-flash` and then `gemini-2.5-flash-lite` from the same backend.
-
-If all these fails, it will return an error.
-
-If you setup `backend1` with a free tier key and `backend2` with a paid key, you can create a setup which will try to use the free tier first and then fallback to the paid key if the free tier fails.
+In this example:
+- Clients sending the `x-goog-api-key: path1` header will first attempt to use `backend1`'s `gemini-3.1-pro`. If that fails, the proxy will automatically try `backend1`'s `gemini-3.1-flash`, and finally `backend1`'s `gemini-3.1-flash-lite`.
+- Clients sending the `x-goog-api-key: path2` header will first attempt `backend1`'s `gemini-3.1-flash`, and if that fails, fail over to `backend2`'s `gemini-3.1-flash`.
 
 ## Usage
 
-First you need to create the config file, for this you can copy the `config.yaml.example` to config.yaml and edit it.
+Start the proxy server:
 
-Then you can run the service with:
 ```bash
 go run cmd/server/main.go
 ```
 
-Then you can point your desired service/client/etc. to this service and use the API key you specified in the config.
+The server will start on the port specified in your `config.yaml` (default is `8080`).
+
+You can now point your desired service, client, or curl requests to the proxy. Instead of using your real Google API key, use the proxy path name (e.g., `path1`) in the `x-goog-api-key` header.
+
+### Example Request
+
+```bash
+curl -H "x-goog-api-key: path1" \
+     -H "Content-type: application/json" \
+     -X POST http://127.0.0.1:8080/ \
+     -d '{
+       "contents": [
+         {
+           "role": "user",
+           "parts": [
+             {
+               "text": "Explain how AI works in a few words."
+             }
+           ]
+         }
+       ]
+     }'
+```
+
+### How it Works
+1. The proxy receives the incoming request and reads the virtual API key (`path1`) from the `x-goog-api-key` header.
+2. It looks up the fallback sequence defined in `config.yaml` for `path1`.
+3. It rewrites the request to target the actual Google Gemini API (`https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`).
+4. It swaps the virtual key for the real API key configured for the current backend.
+5. If the Gemini API returns a successful response (HTTP 200), the proxy forwards it back to the client.
+6. If the Gemini API returns a non-200 status (e.g., rate limit exceeded, server error), the proxy intercepts the failure and retries the request using the next `backend.model` in the list.
+7. If all configured fallbacks fail, an error is returned to the client.
