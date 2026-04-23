@@ -45,7 +45,6 @@ $EDITOR config.yaml
 ---
 
 ## Configuration
->>>>>>> 220b53a (feat: modernize a bit)
 
 ```yaml
 # config.yaml
