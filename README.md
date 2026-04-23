@@ -3,7 +3,7 @@
 > Never hit a rate limit again. A zero-dependency failover proxy for the Gemini API.
 
 ![Go](https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white)
-![License](https://img.shields.io/github/license/gergelyradics/gemini-freefall)
+![License](https://img.shields.io/github/license/Gerifield/gemini-freefall)
 
 **gemini-freefall** sits between your app and the Gemini API. It accepts standard Gemini requests and transparently retries them across a prioritized list of API keys and models — so a rate limit or quota exhaustion on one key never reaches your application.
 
