@@ -10,7 +10,7 @@ import (
 func TestLoadConfig(t *testing.T) {
 	t.Parallel()
 
-	c, err := LoadConfig("../../config.yaml.example")
+	c, err := LoadConfig("../../config.yaml.example", false)
 	require.NoError(t, err)
 
 	require.Len(t, c.Backend, 2)
