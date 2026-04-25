@@ -1,0 +1,31 @@
+backend:
+  - name: "gemini-native"
+    type: "gemini"
+    key: "native-key"
+    models:
+      - "gemini-pro"
+  - name: "openai-backend"
+    type: "openai"
+    key: "openai-key"
+    models:
+      - "gpt-4"
+  - name: "anthropic-backend"
+    type: "anthropic"
+    key: "anthropic-key"
+    models:
+      - "claude-3"
+  - name: "custom-local"
+    type: "custom"
+    base_url: "http://localhost:11434/v1"
+    key: "local-key"
+    models:
+      - "llama-3"
+
+config:
+    port: 8080
+    proxy:
+      mixed-path:
+      - "gemini-native.gemini-pro"
+      - "openai-backend.gpt-4"
+      - "anthropic-backend.claude-3"
+      - "custom-local.llama-3"
