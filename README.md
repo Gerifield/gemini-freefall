@@ -40,6 +40,9 @@ $EDITOR config.yaml
 
 # 3. Run
 ./freefall
+
+# 4. Run in OpenAI-compatible mode
+./freefall -openai
 ```
 
 ---
@@ -50,6 +53,7 @@ $EDITOR config.yaml
 # config.yaml
 backend:
   - name: free-key
+    type: gemini            # (Default) Native Gemini API
     key: "AIza..."          # free-tier Gemini API key
     models:
       - gemini-2.5-pro
@@ -57,9 +61,29 @@ backend:
       - gemini-2.5-flash-lite
 
   - name: paid-key
+    type: gemini
     key: "AIza..."          # paid Gemini API key
     models:
       - gemini-2.5-flash
+
+  - name: openai-backend
+    type: openai            # Uses default OpenAI endpoint (requires -openai flag)
+    key: "sk-proj..."
+    models:
+      - gpt-4o
+
+  - name: anthropic-backend
+    type: anthropic         # Uses Anthropic's OpenAI-compatible endpoint (requires -openai flag)
+    key: "sk-ant..."
+    models:
+      - claude-3-5-sonnet-20241022
+
+  - name: local-qwen
+    type: custom_openai
+    base_url: "http://192.168.1.50:8000/v1"
+    key: "sk-dummy"
+    models:
+      - qwen-14b
 
 config:
   port: 8080
@@ -77,6 +101,15 @@ config:
 ```
 
 Each entry under `proxy` is a named **path** — use the path name as your `x-goog-api-key`. Targets are `<backend-name>.<model-name>` and are tried left-to-right.
+
+### The `-openai` Flag
+
+Because `gemini-freefall` operates as a zero-memory envelope router, it **does not** parse or translate JSON payloads.
+If a client sends an OpenAI-formatted payload, it will fail if routed to a native Gemini backend, and vice versa.
+
+To prevent misconfigurations:
+- Running without flags allows **only** `type: gemini` backends. Non-Gemini targets are dropped from routing at startup.
+- Running with `-openai` allows **only** OpenAI-compatible backends (`openai`, `anthropic`, `custom_openai`, `gemini_openai`). Native Gemini targets are dropped.
 
 ---
 

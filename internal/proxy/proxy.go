@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 const (
@@ -66,13 +67,33 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Construct the final URL based on backend type
+		var targetURL string
+		if backend.Type == "gemini" {
+			targetURL = fmt.Sprintf(targetURLPattern, modelName(c))
+		} else {
+			baseURL := backend.BaseURL
+			if baseURL == "" {
+				baseURL = l.config.BaseURLs[backend.Type]
+			}
+
+			// Append incoming path, unconditionally stripping "/v1" if it's there
+			// to avoid duplicating API versions or creating invalid endpoints
+			incomingPath := r.URL.Path
+			if strings.HasPrefix(incomingPath, "/v1/") {
+				incomingPath = strings.TrimPrefix(incomingPath, "/v1")
+			}
+			targetURL = baseURL + incomingPath
+		}
+
 		// Forward the request to the backend
-		slog.Info("Forwarding request to backend", slog.String("backend", backend.Name), slog.String("proxyPath", c))
-		req, err := http.NewRequest(r.Method, fmt.Sprintf(targetURLPattern, modelName(c)), bytes.NewReader(bodyBuffer))
+		slog.Info("Forwarding request to backend", slog.String("backend", backend.Name), slog.String("proxyPath", c), slog.String("targetURL", targetURL))
+		req, err := http.NewRequest(r.Method, targetURL, bytes.NewReader(bodyBuffer))
 		if err != nil {
 			slog.Error("failed to create new request", slog.Any("err", err), slog.String("proxyPath", c))
 			continue
 		}
+
 		// Copy headers from the original request
 		for key, values := range r.Header {
 			for _, value := range values {
@@ -81,7 +102,16 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Re-set the header for the given backend's api key
-		req.Header.Set(headerAPIKey, backend.Key)
+		if backend.Type == "gemini" {
+			req.Header.Set(headerAPIKey, backend.Key)
+		} else if backend.Type == "anthropic" {
+			req.Header.Set("x-api-key", backend.Key)
+			req.Header.Del(headerAPIKey)
+			req.Header.Del("Authorization")
+		} else {
+			req.Header.Set("Authorization", "Bearer "+backend.Key)
+			req.Header.Del(headerAPIKey)
+		}
 
 		resp, err := l.httpClient.Do(req)
 		if err != nil {
@@ -101,6 +131,7 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		size, _ := io.Copy(w, resp.Body)
+		_ = resp.Body.Close() // Close the response body to avoid resource leaks
 		slog.Info("successfully forwarded request", slog.Int64("responseSize", size), slog.String("backend", backend.Name), slog.String("proxyPath", c))
 
 		// We are done, exit the handler
