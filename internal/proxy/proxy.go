@@ -131,6 +131,7 @@ func (l *Logic) handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		size, _ := io.Copy(w, resp.Body)
+		_ = resp.Body.Close() // Close the response body to avoid resource leaks
 		slog.Info("successfully forwarded request", slog.Int64("responseSize", size), slog.String("backend", backend.Name), slog.String("proxyPath", c))
 
 		// We are done, exit the handler
